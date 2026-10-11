@@ -44,4 +44,9 @@ async function countAll(){
     return rows[0].count;
 }
 
-module.exports = { findByThreadId, findById, create, updateContent, deleteById, setHidden, countAll };
+async function countCreatedToday(){
+    const [rows] = await pool.execute(`SELECT COUNT(*) AS count FROM posts WHERE created_at >= CURDATE()`);
+    return rows[0].count;
+}
+
+module.exports = { findByThreadId, findById, create, updateContent, deleteById, setHidden, countAll, countCreatedToday };

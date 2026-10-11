@@ -1,8 +1,8 @@
 const pool = require('../db/pool');
 
-async function create({ token, user_id, expires_at }){
-    const sql = `INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)`;
-    await pool.execute(sql, [token, user_id, expires_at]);
+async function create({ token, user_id, expires_at, ip, user_agent }){
+    const sql = `INSERT INTO sessions (token, user_id, expires_at, ip, user_agent) VALUES (?, ?, ?, ?, ?)`;
+    await pool.execute(sql, [token, user_id, expires_at, ip, user_agent]);
 }
 
 async function findUserByToken(token){
@@ -16,6 +16,34 @@ async function findUserByToken(token){
     `;
     const [rows] = await pool.execute(sql, [token]);
     return rows[0] ?? null;
+}
+
+async function findActive(currentToken){
+    const sql = `
+        SELECT s.id, LEFT(s.token, 8) AS token_preview, s.ip, s.user_agent,
+               s.created_at, s.expires_at, (s.token = ?) AS is_current,
+               u.id AS user_id, u.username
+        FROM sessions s
+        JOIN users u ON u.id = s.user_id
+        WHERE s.expires_at > NOW()
+        ORDER BY s.created_at DESC
+    `;
+    const [rows] = await pool.execute(sql, [currentToken ?? '']);
+    return rows;
+}
+
+async function findById(id){
+    const [rows] = await pool.execute(`SELECT id, user_id FROM sessions WHERE id = ? LIMIT 1`, [id]);
+    return rows[0] ?? null;
+}
+
+async function deleteById(id){
+    await pool.execute(`DELETE FROM sessions WHERE id = ?`, [id]);
+}
+
+async function deleteByUserId(userId){
+    const [result] = await pool.execute(`DELETE FROM sessions WHERE user_id = ?`, [userId]);
+    return result.affectedRows;
 }
 
 async function deleteByToken(token){
@@ -35,4 +63,14 @@ async function countActive(){
     return rows[0].count;
 }
 
-module.exports = { create, findUserByToken, deleteByToken, deleteExpired, countActive };
+module.exports = {
+    create,
+    findUserByToken,
+    findActive,
+    findById,
+    deleteById,
+    deleteByUserId,
+    deleteByToken,
+    deleteExpired,
+    countActive,
+};

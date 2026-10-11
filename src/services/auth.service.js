@@ -129,7 +129,7 @@ async function register({ username, email, password }) {
 }
 
 
-async function login({ email, password }) {
+async function login({ email, password }, { ip = null, userAgent = null } = {}) {
     if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
         throw new AppError('Email and password are required', 400);
     }
@@ -155,6 +155,8 @@ async function login({ email, password }) {
         token,
         user_id: user.id,
         expires_at: new Date(Date.now() + SESSION_TTL_MS),
+        ip,
+        user_agent: userAgent ? userAgent.slice(0, 255) : null,
     });
 
     return {

@@ -36,10 +36,14 @@ async function login(req, res) {
     }
 
     try {
-        const { token, user } = await authService.login(req.body);
+        const { token, user } = await authService.login(req.body, {
+            ip: ip || null,
+            userAgent: req.headers['user-agent'] || null,
+        });
         const maxAge = Math.floor(authService.SESSION_TTL_MS / 1000);
 
         loginLimiter.reset(ip);
+        req.user = user;
 
         res.writeHead(200, {
             ...JSON_HEADER,

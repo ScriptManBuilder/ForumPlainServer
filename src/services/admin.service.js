@@ -1,18 +1,22 @@
 const userRepository = require('../repositories/user.repository');
 const roleRepository = require('../repositories/role.repository');
+const threadRepository = require('../repositories/threads.repository');
+const postRepository = require('../repositories/posts.repository');
+const sessionRepository = require('../repositories/session.repository');
 const moderationRepository = require('../repositories/moderation.repository');
+const requestLogRepository = require('../repositories/requestLog.repository');
 const AppError = require('../errors/app.error');
 
-function parseUserId(value) {
+function parseId(value, fieldName) {
     const id = Number(value);
     if (!Number.isInteger(id) || id <= 0) {
-        throw new AppError('User id must be a positive integer', 400);
+        throw new AppError(`${fieldName} must be a positive integer`, 400);
     }
     return id;
 }
 
 async function findTargetUser(actor, userId) {
-    const id = parseUserId(userId);
+    const id = parseId(userId, 'User id');
 
     const target = await userRepository.findById(id);
     if (!target) {
@@ -24,6 +28,35 @@ async function findTargetUser(actor, userId) {
     }
 
     return target;
+}
+
+async function getDashboard() {
+    const [
+        users,
+        threads,
+        posts,
+        banned,
+        newUsersToday,
+        newUsersWeek,
+        postsToday,
+        activeSessions,
+        recentActions,
+    ] = await Promise.all([
+        userRepository.countAll(),
+        threadRepository.countAll(),
+        postRepository.countAll(),
+        userRepository.countBanned(),
+        userRepository.countCreatedToday(),
+        userRepository.countCreatedInLastDays(7),
+        postRepository.countCreatedToday(),
+        sessionRepository.countActive(),
+        moderationRepository.findRecent(10),
+    ]);
+
+    return {
+        stats: { users, threads, posts, banned, newUsersToday, newUsersWeek, postsToday, activeSessions },
+        recentActions,
+    };
 }
 
 async function listUsers() {
@@ -63,4 +96,59 @@ async function setBanned(actor, userId, isBanned) {
     return { id: target.id, is_banned: isBanned };
 }
 
-module.exports = { listUsers, changeRole, setBanned };
+async function revokeUserSessions(actor, userId) {
+    const target = await findTargetUser(actor, userId);
+
+    const revoked = await sessionRepository.deleteByUserId(target.id);
+    await moderationRepository.log({
+        moderator_id: actor.id,
+        action: 'revoke_all_sessions',
+        target_type: 'user',
+        target_id: target.id,
+    });
+
+    return { id: target.id, revoked };
+}
+
+async function listSessions(currentToken) {
+    return sessionRepository.findActive(currentToken);
+}
+
+async function revokeSession(actor, sessionId) {
+    const id = parseId(sessionId, 'Session id');
+
+    const session = await sessionRepository.findById(id);
+    if (!session) {
+        throw new AppError('Session not found', 404);
+    }
+
+    await sessionRepository.deleteById(id);
+    await moderationRepository.log({
+        moderator_id: actor.id,
+        action: 'revoke_session',
+        target_type: 'user',
+        target_id: session.user_id,
+    });
+
+    return { id };
+}
+
+async function listAuditLog(limit) {
+    return moderationRepository.findRecent(limit);
+}
+
+async function listRequestLogs({ limit, statusClass }) {
+    return requestLogRepository.findRecent({ limit, statusClass });
+}
+
+module.exports = {
+    getDashboard,
+    listUsers,
+    changeRole,
+    setBanned,
+    revokeUserSessions,
+    listSessions,
+    revokeSession,
+    listAuditLog,
+    listRequestLogs,
+};

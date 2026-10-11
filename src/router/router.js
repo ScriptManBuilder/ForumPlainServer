@@ -60,6 +60,7 @@ function matchRoute(method, pathname) {
 }
 
 async function handleRequest(req, res) {
+    const startedAt = Date.now();
     const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
 
     res.setHeader('Access-Control-Allow-Origin', FRONTEND_ORIGIN);
@@ -105,7 +106,7 @@ async function handleRequest(req, res) {
             console.error(err);
         }
     } finally {
-        logRequest(req, res.statusCode);
+        logRequest(req, res.statusCode, Date.now() - startedAt);
     }
 }
 

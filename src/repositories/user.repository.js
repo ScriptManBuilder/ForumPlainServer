@@ -31,7 +31,8 @@ async function create({
 
 async function findAll(){
     const sql=`
-        SELECT u.id, u.username, u.email, u.role_id, r.name AS role, u.is_banned, u.created_at
+        SELECT u.id, u.username, u.email, u.role_id, r.name AS role, u.is_banned, u.created_at,
+               (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > NOW()) AS active_sessions
         FROM users u
         JOIN roles r ON r.id = u.role_id
         ORDER BY u.id
@@ -67,4 +68,35 @@ async function countAll(){
     return rows[0].count;
 }
 
-module.exports = { findByEmail, findByUsername, create, findAll, findById, updateRole, setBanned, findRecent, countAll };
+async function countBanned(){
+    const [rows] = await pool.execute(`SELECT COUNT(*) AS count FROM users WHERE is_banned = 1`);
+    return rows[0].count;
+}
+
+async function countCreatedToday(){
+    const [rows] = await pool.execute(`SELECT COUNT(*) AS count FROM users WHERE created_at >= CURDATE()`);
+    return rows[0].count;
+}
+
+async function countCreatedInLastDays(days){
+    const [rows] = await pool.query(
+        `SELECT COUNT(*) AS count FROM users WHERE created_at >= NOW() - INTERVAL ? DAY`,
+        [days]
+    );
+    return rows[0].count;
+}
+
+module.exports = {
+    findByEmail,
+    findByUsername,
+    create,
+    findAll,
+    findById,
+    updateRole,
+    setBanned,
+    findRecent,
+    countAll,
+    countBanned,
+    countCreatedToday,
+    countCreatedInLastDays,
+};
